@@ -1,20 +1,34 @@
-﻿$item = "GalaxyS8"
-$email = "calumochkas@gmail.com"
-$url = "https://www.ebay.co.uk/sch/Mobile-Smart-Phones/9355/i.html?Brand=Samsung&_nkw=&_dcat=9355&Model=Samsung%2520Galaxy%2520S8&LH_ItemCondition=1000%7C1500%7C3000&_sop=10"
-$highestprice = "450"
-$logpath = "C:\Temp\Logs\EbayScraper"
-$wget = Invoke-WebRequest -uri $url
+﻿[cmdletbinding()]
+param(
+    [string]$item = "",
+    [string]$url = "",
+    [int]$highestprice = "",
+    [string]$email = "",
+    [string]$logpath = "C:\Temp\Logs\EbayScraper"
+)
 
 $datetime = Get-Date -Format ddMMyy-HH.mm
-$results = $wget.ParsedHtml.getElementsByClassName("sresult")
 
+# Get Search Result Data
+$wget = Invoke-WebRequest -uri $url
+$results = $wget.ParsedHtml.getElementsByClassName("sresult")
+function ClearLogData ($sitem,$slogpath,$age){
+    $objects = Get-ChildItem -Path $slogpath | ?{$_.Fullname -match "$sitem*\.log" -and $_.LastWriteTime -gt (Get-Date).AddDays(-$age)}
+    $objectcount = $objects.Count
+    Write-Verbose "Deleting ($objectcount).Count Log Files from $slogpath"
+    Remove-Item $objects -Force
+
+}
+# Build Object Collection
 $coll = @()
 
+# Loop through each result
 foreach ($resultitem in $results){
             $sobj = "" | select Name,Cost,Format,URL,New
             
             $title = $resultitem.getElementsByClassName("lvtitle")[0].getAttribute("outerText")
             $prices = $resultitem.getElementsByClassName("lvprice")[0].getAttribute("outerText")
+            # If there are two prices returned, write the second price to the variable
             if ($prices.count -eq "1"){
                 $price = $resultitem.getElementsByClassName("lvprice")[0].getAttribute("outerText")
             }
@@ -26,6 +40,7 @@ foreach ($resultitem in $results){
             $price = $price.Trim("£")
             $sobj.Name = $title
             $sobj.Cost = $price
+            # Capture data inside quote marks by regex for buying format
             $sobj.Format = [regex]::match($formathtml,'\"([^\)]+)\"').Groups[1].Value
             $sobj.URL = $link
             $latestlog = Get-Content (Get-Item "$logpath\$item*" | Sort-Object -Property "LastWriteTime" -Descending)[0] | ConvertFrom-Csv
@@ -35,6 +50,7 @@ foreach ($resultitem in $results){
             else {
                 $sobj.new = $true
             }
+            # Add item to object collection
             $coll += $sobj
 }
 
